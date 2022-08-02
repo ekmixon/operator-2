@@ -45,16 +45,14 @@ def _exe_path(path: Path) -> typing.Optional[Path]:
     Here path is the absolute path to a binary, but might be missing an extension.
     """
     p = shutil.which(path.name, mode=os.F_OK, path=str(path.parent))
-    if p is None:
-        return None
-    return Path(p)
+    return None if p is None else Path(p)
 
 
 def _get_charm_dir():
     charm_dir = os.environ.get("JUJU_CHARM_DIR")
     if charm_dir is None:
         # Assume $JUJU_CHARM_DIR/lib/op/main.py structure.
-        charm_dir = Path('{}/../../..'.format(__file__)).resolve()
+        charm_dir = Path(f'{__file__}/../../..').resolve()
     else:
         charm_dir = Path(charm_dir).resolve()
     return charm_dir
@@ -74,13 +72,17 @@ def _create_event_link(charm, bound_event, link_to):
     elif issubclass(bound_event.event_type, ops.charm.ActionEvent):
         if not bound_event.event_kind.endswith("_action"):
             raise RuntimeError(
-                'action event name {} needs _action suffix'.format(bound_event.event_kind))
+                f'action event name {bound_event.event_kind} needs _action suffix'
+            )
+
         event_dir = charm.framework.charm_dir / 'actions'
         # The event_kind is suffixed with "_action" while the executable is not.
         event_path = event_dir / bound_event.event_kind[:-len('_action')].replace('_', '-')
     else:
         raise RuntimeError(
-            'cannot create a symlink: unsupported event type {}'.format(bound_event.event_type))
+            f'cannot create a symlink: unsupported event type {bound_event.event_type}'
+        )
+
 
     event_dir.mkdir(exist_ok=True)
     if not event_path.exists():
@@ -152,8 +154,7 @@ def _get_event_args(charm, bound_event):
         container = model.unit.get_container(workload_name)
         return [container], {}
     elif issubclass(event_type, ops.charm.StorageEvent):
-        storage_id = os.environ.get("JUJU_STORAGE_ID", "")
-        if storage_id:
+        if storage_id := os.environ.get("JUJU_STORAGE_ID", ""):
             storage_name = storage_id.split("/")[0]
         else:
             # Before JUJU_STORAGE_ID exists, take the event name as
@@ -180,7 +181,7 @@ def _get_event_args(charm, bound_event):
 
     if not remote_app_name and remote_unit_name:
         if '/' not in remote_unit_name:
-            raise RuntimeError('invalid remote unit name: {}'.format(remote_unit_name))
+            raise RuntimeError(f'invalid remote unit name: {remote_unit_name}')
         remote_app_name = remote_unit_name.split('/')[0]
 
     kwargs = {}
@@ -191,9 +192,7 @@ def _get_event_args(charm, bound_event):
     if departing_unit_name:
         kwargs['departing_unit_name'] = departing_unit_name
 
-    if relation:
-        return [relation], kwargs
-    return [], {}
+    return ([relation], kwargs) if relation else ([], {})
 
 
 class _Dispatcher:
@@ -281,7 +280,7 @@ class _Dispatcher:
         """Sets the name attribute to that which can be inferred from the given path."""
         name = path.name.replace('-', '_')
         if path.parent.name == 'actions':
-            name = '{}_action'.format(name)
+            name = f'{name}_action'
         self.event_name = name
 
     def _init_legacy(self):
@@ -369,11 +368,7 @@ def main(charm_class: typing.Type[ops.charm.CharmBase], use_juju_for_storage: bo
 
     metadata = (charm_dir / 'metadata.yaml').read_text()
     actions_meta = charm_dir / 'actions.yaml'
-    if actions_meta.exists():
-        actions_metadata = actions_meta.read_text()
-    else:
-        actions_metadata = None
-
+    actions_metadata = actions_meta.read_text() if actions_meta.exists() else None
     if not yaml.__with_libyaml__:
         logger.debug('yaml does not have libyaml extensions, using slower pure Python yaml loader')
     meta = ops.charm.CharmMeta.from_yaml(metadata, actions_metadata)

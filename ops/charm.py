@@ -298,7 +298,9 @@ class RelationEvent(HookEvent):
 
         if unit is not None and unit.app != app:
             raise RuntimeError(
-                'cannot create RelationEvent with application {} and unit {}'.format(app, unit))
+                f'cannot create RelationEvent with application {app} and unit {unit}'
+            )
+
 
         self.relation = relation
         self.app = app
@@ -327,14 +329,12 @@ class RelationEvent(HookEvent):
         self.relation = self.framework.model.get_relation(
             snapshot['relation_name'], snapshot['relation_id'])
 
-        app_name = snapshot.get('app_name')
-        if app_name:
+        if app_name := snapshot.get('app_name'):
             self.app = self.framework.model.get_app(app_name)
         else:
             self.app = None
 
-        unit_name = snapshot.get('unit_name')
-        if unit_name:
+        if unit_name := snapshot.get('unit_name'):
             self.unit = self.framework.model.get_unit(unit_name)
         else:
             self.unit = None
@@ -417,9 +417,11 @@ class RelationDepartedEvent(RelationEvent):
         """The `ops.model.Unit` that is departing, if any."""
         # doing this on init would fail because `framework` gets patched in
         # post-init
-        if not self._departing_unit_name:
-            return None
-        return self.framework.model.get_unit(self._departing_unit_name)
+        return (
+            self.framework.model.get_unit(self._departing_unit_name)
+            if self._departing_unit_name
+            else None
+        )
 
     def snapshot(self) -> dict:
         """Used by the framework to serialize the event to disk.
@@ -563,8 +565,7 @@ class WorkloadEvent(HookEvent):
 
         Not meant to be called by charm code.
         """
-        container_name = snapshot.get('container_name')
-        if container_name:
+        if container_name := snapshot.get('container_name'):
             self.workload = self.framework.model.unit.get_container(container_name)
         else:
             self.workload = None
@@ -674,24 +675,30 @@ class CharmBase(Object):
 
         for relation_name in self.framework.meta.relations:
             relation_name = relation_name.replace('-', '_')
-            self.on.define_event(relation_name + '_relation_created', RelationCreatedEvent)
-            self.on.define_event(relation_name + '_relation_joined', RelationJoinedEvent)
-            self.on.define_event(relation_name + '_relation_changed', RelationChangedEvent)
-            self.on.define_event(relation_name + '_relation_departed', RelationDepartedEvent)
-            self.on.define_event(relation_name + '_relation_broken', RelationBrokenEvent)
+            self.on.define_event(f'{relation_name}_relation_created', RelationCreatedEvent)
+            self.on.define_event(f'{relation_name}_relation_joined', RelationJoinedEvent)
+            self.on.define_event(f'{relation_name}_relation_changed', RelationChangedEvent)
+            self.on.define_event(
+                f'{relation_name}_relation_departed', RelationDepartedEvent
+            )
+
+            self.on.define_event(f'{relation_name}_relation_broken', RelationBrokenEvent)
 
         for storage_name in self.framework.meta.storages:
             storage_name = storage_name.replace('-', '_')
-            self.on.define_event(storage_name + '_storage_attached', StorageAttachedEvent)
-            self.on.define_event(storage_name + '_storage_detaching', StorageDetachingEvent)
+            self.on.define_event(f'{storage_name}_storage_attached', StorageAttachedEvent)
+            self.on.define_event(
+                f'{storage_name}_storage_detaching', StorageDetachingEvent
+            )
+
 
         for action_name in self.framework.meta.actions:
             action_name = action_name.replace('-', '_')
-            self.on.define_event(action_name + '_action', ActionEvent)
+            self.on.define_event(f'{action_name}_action', ActionEvent)
 
         for container_name in self.framework.meta.containers:
             container_name = container_name.replace('-', '_')
-            self.on.define_event(container_name + '_pebble_ready', PebbleReadyEvent)
+            self.on.define_event(f'{container_name}_pebble_ready', PebbleReadyEvent)
 
     @property
     def app(self) -> model.Application:
@@ -793,10 +800,7 @@ class CharmMeta:
                          for name, rel in raw.get('provides', {}).items()}
         self.peers = {name: RelationMeta(RelationRole.peer, name, rel)
                       for name, rel in raw.get('peers', {}).items()}
-        self.relations = {}
-        self.relations.update(self.requires)
-        self.relations.update(self.provides)
-        self.relations.update(self.peers)
+        self.relations = self.requires | self.provides | self.peers
         self.storages = {name: StorageMeta(name, storage)
                          for name, storage in raw.get('storage', {}).items()}
         self.resources = {name: ResourceMeta(name, res)
@@ -879,12 +883,15 @@ class RelationMeta:
 
         self.limit = raw.get('limit')
         if self.limit and not isinstance(self.limit, int):
-            raise TypeError("limit should be an int, not {}".format(type(self.limit)))
+            raise TypeError(f"limit should be an int, not {type(self.limit)}")
 
         self.scope = raw.get('scope') or self._default_scope
         if self.scope not in self.VALID_SCOPES:
-            raise TypeError("scope should be one of {}; not '{}'".format(
-                ', '.join("'{}'".format(s) for s in self.VALID_SCOPES), self.scope))
+            raise TypeError(
+                "scope should be one of {}; not '{}'".format(
+                    ', '.join(f"'{s}'" for s in self.VALID_SCOPES), self.scope
+                )
+            )
 
 
 class StorageMeta:
@@ -1046,15 +1053,14 @@ class ContainerStorageMeta:
         return self._locations
 
     def __getattr__(self, name):
-        if name == "location":
-            if len(self._locations) == 1:
-                return self._locations[0]
-            else:
-                raise RuntimeError(
-                    "container has more than one mountpoint with the same backing storage. "
-                    "Request .locations to see a list"
-                )
-        else:
+        if name != "location":
             raise AttributeError(
                 "{.__class__.__name__} has no such attribute: {}!".format(self, name)
+            )
+        if len(self._locations) == 1:
+            return self._locations[0]
+        else:
+            raise RuntimeError(
+                "container has more than one mountpoint with the same backing storage. "
+                "Request .locations to see a list"
             )

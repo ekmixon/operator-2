@@ -47,8 +47,7 @@ class Dispatcher:
             sel = selectors.DefaultSelector()
             sel.register(self.app.sock.sock, selectors.EVENT_READ)
 
-            r = sel.select(self.ping_timeout)
-            if r:
+            if r := sel.select(self.ping_timeout):
                 if not read_callback():
                     break
             check_callback()
@@ -65,8 +64,7 @@ class SSLDispatcher:
 
     def read(self, sock, read_callback, check_callback):
         while self.app.keep_running:
-            r = self.select()
-            if r:
+            if r := self.select():
                 if not read_callback():
                     break
             check_callback()
@@ -206,7 +204,7 @@ class WebSocketApp(object):
                 try:
                     self.sock.ping(payload)
                 except Exception as ex:
-                    _logging.warning("send_ping routine terminated: {}".format(ex))
+                    _logging.warning(f"send_ping routine terminated: {ex}")
                     break
 
     def run_forever(self, sockopt=None, sslopt=None,
@@ -295,8 +293,7 @@ class WebSocketApp(object):
             self.keep_running = False
             if self.sock:
                 self.sock.close()
-            close_status_code, close_reason = self._get_close_args(
-                close_frame if close_frame else None)
+            close_status_code, close_reason = self._get_close_args(close_frame or None)
             self.sock = None
 
             # Finally call the callback AFTER all teardown is complete
@@ -407,6 +404,6 @@ class WebSocketApp(object):
                 callback(self, *args)
 
             except Exception as e:
-                _logging.error("error from callback {}: {}".format(callback, e))
+                _logging.error(f"error from callback {callback}: {e}")
                 if self.on_error:
                     self.on_error(self, e)

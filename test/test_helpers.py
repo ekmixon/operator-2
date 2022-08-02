@@ -128,5 +128,4 @@ class BaseTestCase(unittest.TestCase):
         """Create a Model object."""
         backend = _ModelBackend(unit_name='myapp/0')
         meta = CharmMeta()
-        model = Model(meta, backend)
-        return model
+        return Model(meta, backend)

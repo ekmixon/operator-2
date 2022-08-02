@@ -385,7 +385,7 @@ class TestLib(TestCase):
             ops.lib._Lib(None, "foo", "alice@example.com", 1, 1))
 
         with self.assertRaises(TypeError):
-            42 < ops.lib._Lib(None, "bar", "alice@example.com", 1, 1)
+            ops.lib._Lib(None, "bar", "alice@example.com", 1, 1) > 42
         with self.assertRaises(TypeError):
             ops.lib._Lib(None, "bar", "alice@example.com", 1, 1) < 42
 
@@ -466,8 +466,7 @@ class TestLibFunctional(TestCase):
                     # everything-is-the-same :-)
                     continue
                 for patch_a in [38, 42]:
-                    desc = "A: {}/{}/{}; B: {}/{}/{}".format(
-                        pkg_a, lib_a, patch_a, pkg_b, lib_b, patch_b)
+                    desc = f"A: {pkg_a}/{lib_a}/{patch_a}; B: {pkg_b}/{lib_b}/{patch_b}"
                     with self.subTest(desc):
                         tmpdir = self._mkdtemp()
                         sys.path = [tmpdir]
@@ -504,8 +503,7 @@ class TestLibFunctional(TestCase):
         for pkg_a in ["foo", "fooA"]:
             for lib_a in ["bar", "barA"]:
                 for patch_a in [38, 42]:
-                    desc = "A: {}/{}/{}; B: {}/{}/{}".format(
-                        pkg_a, lib_a, patch_a, pkg_b, lib_b, patch_b)
+                    desc = f"A: {pkg_a}/{lib_a}/{patch_a}; B: {pkg_b}/{lib_b}/{patch_b}"
                     with self.subTest(desc):
                         tmp_dir_a = self._mkdtemp()
                         tmp_dir_b = self._mkdtemp()

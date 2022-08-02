@@ -52,14 +52,14 @@ except:
 class proxy_info(object):
 
     def __init__(self, **options):
-        self.proxy_host = options.get("http_proxy_host", None)
+        self.proxy_host = options.get("http_proxy_host")
         if self.proxy_host:
             self.proxy_port = options.get("http_proxy_port", 0)
-            self.auth = options.get("http_proxy_auth", None)
-            self.no_proxy = options.get("http_no_proxy", None)
+            self.auth = options.get("http_proxy_auth")
+            self.no_proxy = options.get("http_no_proxy")
             self.proxy_protocol = options.get("proxy_type", "http")
             # Note: If timeout not specified, default python-socks timeout is 60 seconds
-            self.proxy_timeout = options.get("timeout", None)
+            self.proxy_timeout = options.get("timeout")
             if self.proxy_protocol not in ['http', 'socks4', 'socks4a', 'socks5', 'socks5h']:
                 raise ProxyError("Only http, socks4, socks5 proxy protocols are supported")
         else:
@@ -75,20 +75,19 @@ def _start_proxied_socket(url, options, proxy):
 
     hostname, port, resource, is_secure = parse_url(url)
 
-    if proxy.proxy_protocol == "socks5":
-        rdns = False
-        proxy_type = ProxyType.SOCKS5
     if proxy.proxy_protocol == "socks4":
         rdns = False
         proxy_type = ProxyType.SOCKS4
-    # socks5h and socks4a send DNS through proxy
-    if proxy.proxy_protocol == "socks5h":
-        rdns = True
-        proxy_type = ProxyType.SOCKS5
-    if proxy.proxy_protocol == "socks4a":
+    elif proxy.proxy_protocol == "socks4a":
         rdns = True
         proxy_type = ProxyType.SOCKS4
 
+    elif proxy.proxy_protocol == "socks5":
+        rdns = False
+        proxy_type = ProxyType.SOCKS5
+    elif proxy.proxy_protocol == "socks5h":
+        rdns = True
+        proxy_type = ProxyType.SOCKS5
     ws_proxy = Proxy.create(
         proxy_type=proxy_type,
         host=proxy.proxy_host,
@@ -99,10 +98,11 @@ def _start_proxied_socket(url, options, proxy):
 
     sock = ws_proxy.connect(hostname, port, timeout=proxy.proxy_timeout)
 
-    if is_secure and HAVE_SSL:
-        sock = _ssl_socket(sock, options.sslopt, hostname)
-    elif is_secure:
-        raise WebSocketException("SSL not available.")
+    if is_secure:
+        if HAVE_SSL:
+            sock = _ssl_socket(sock, options.sslopt, hostname)
+        else:
+            raise WebSocketException("SSL not available.")
 
     return sock, (hostname, port, resource)
 
@@ -111,7 +111,7 @@ def connect(url, options, proxy, socket):
     # Use _start_proxied_socket() only for socks4 or socks5 proxy
     # Use _tunnel() for http proxy
     # TODO: Use python-socks for http protocol also, to standardize flow
-    if proxy.proxy_host and not socket and not (proxy.proxy_protocol == "http"):
+    if proxy.proxy_host and not socket and proxy.proxy_protocol != "http":
         return _start_proxied_socket(url, options, proxy)
 
     hostname, port, resource, is_secure = parse_url(url)
@@ -122,8 +122,7 @@ def connect(url, options, proxy, socket):
     addrinfo_list, need_tunnel, auth = _get_addrinfo_list(
         hostname, port, is_secure, proxy)
     if not addrinfo_list:
-        raise WebSocketException(
-            "Host not found.: " + hostname + ":" + str(port))
+        raise WebSocketException(f"Host not found.: {hostname}:{str(port)}")
 
     sock = None
     try:
@@ -249,15 +248,19 @@ def _wrap_sni_socket(sock, sslopt, hostname, check_hostname):
 
 def _ssl_socket(sock, user_sslopt, hostname):
     sslopt = dict(cert_reqs=ssl.CERT_REQUIRED)
-    sslopt.update(user_sslopt)
+    sslopt |= user_sslopt
 
-    certPath = os.environ.get('WEBSOCKET_CLIENT_CA_BUNDLE')
-    if certPath and os.path.isfile(certPath) \
-            and user_sslopt.get('ca_certs', None) is None:
-        sslopt['ca_certs'] = certPath
-    elif certPath and os.path.isdir(certPath) \
-            and user_sslopt.get('ca_cert_path', None) is None:
-        sslopt['ca_cert_path'] = certPath
+    if certPath := os.environ.get('WEBSOCKET_CLIENT_CA_BUNDLE'):
+        if (
+            os.path.isfile(certPath)
+            and user_sslopt.get('ca_certs', None) is None
+        ):
+            sslopt['ca_certs'] = certPath
+        elif (
+            os.path.isdir(certPath)
+            and user_sslopt.get('ca_cert_path', None) is None
+        ):
+            sslopt['ca_cert_path'] = certPath
 
     if sslopt.get('server_hostname', None):
         hostname = sslopt['server_hostname']
@@ -281,7 +284,7 @@ def _tunnel(sock, host, port, auth):
     if auth and auth[0]:
         auth_str = auth[0]
         if auth[1]:
-            auth_str += ":" + auth[1]
+            auth_str += f":{auth[1]}"
         encoded_str = base64encode(auth_str.encode()).strip().decode().replace('\n', '')
         connect_header += "Proxy-Authorization: Basic %s\r\n" % encoded_str
     connect_header += "\r\n"
@@ -321,15 +324,14 @@ def read_headers(sock):
                 status_message = status_info[2]
         else:
             kv = line.split(":", 1)
-            if len(kv) == 2:
-                key, value = kv
-                if key.lower() == "set-cookie" and headers.get("set-cookie"):
-                    headers["set-cookie"] = headers.get("set-cookie") + "; " + value.strip()
-                else:
-                    headers[key.lower()] = value.strip()
-            else:
+            if len(kv) != 2:
                 raise WebSocketException("Invalid header")
 
+            key, value = kv
+            if key.lower() == "set-cookie" and headers.get("set-cookie"):
+                headers["set-cookie"] = headers.get("set-cookie") + "; " + value.strip()
+            else:
+                headers[key.lower()] = value.strip()
     trace("-----------------------")
 
     return status, headers, status_message

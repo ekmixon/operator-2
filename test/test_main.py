@@ -63,12 +63,16 @@ is_windows = platform.system() == 'Windows'
 
 # This relies on the expected repository structure to find a path to
 # source of the charm under test.
-TEST_CHARM_DIR = Path(__file__ + '/../charms/test_main').resolve()
+TEST_CHARM_DIR = Path(f'{__file__}/../charms/test_main').resolve()
 
 VERSION_LOGLINE = [
-    'juju-log', '--log-level', 'DEBUG', '--',
-    'Operator Framework {} up and running.'.format(version),
+    'juju-log',
+    '--log-level',
+    'DEBUG',
+    '--',
+    f'Operator Framework {version} up and running.',
 ]
+
 SLOW_YAML_LOGLINE = [
     'juju-log', '--log-level', 'DEBUG', '--',
     'yaml does not have libyaml extensions, using slower pure Python yaml loader',
@@ -133,7 +137,7 @@ class CharmInitTestCase(unittest.TestCase):
             'JUJU_VERSION': '2.7.0',
         }
         if extra_environ is not None:
-            fake_environ.update(extra_environ)
+            fake_environ |= extra_environ
         with patch.dict(os.environ, fake_environ):
             with patch('ops.main._emit_charm_event'):
                 with patch('ops.main._get_charm_dir') as mock_charmdir:
@@ -558,7 +562,7 @@ class _TestMain(abc.ABC):
         for event_spec, expected_event_data in events_under_test:
             state = self._simulate_event(event_spec)
 
-            state_key = 'on_' + event_spec.event_name
+            state_key = f'on_{event_spec.event_name}'
             handled_events = getattr(state, state_key, [])
 
             # Make sure that a handler for that event was called once.
@@ -570,8 +574,10 @@ class _TestMain(abc.ABC):
             self.assertEqual(list(state.observed_event_types), [event_spec.event_type.__name__])
 
             if event_spec.event_name in expected_event_data:
-                self.assertEqual(state[event_spec.event_name + '_data'],
-                                 expected_event_data[event_spec.event_name])
+                self.assertEqual(
+                    state[f'{event_spec.event_name}_data'],
+                    expected_event_data[event_spec.event_name],
+                )
 
     def test_event_not_implemented(self):
         """Make sure events without implementation do not cause non-zero exit."""
@@ -604,19 +610,39 @@ class _TestMain(abc.ABC):
 
         expected = [
             VERSION_LOGLINE,
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Using local storage: {} already exists'.format(self.CHARM_STATE_FILE)],
-            ['juju-log', '--log-level', 'DEBUG', '--', 'Emitting Juju event collect_metrics.'],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                f'Using local storage: {self.CHARM_STATE_FILE} already exists',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                'Emitting Juju event collect_metrics.',
+            ],
             ['add-metric', '--labels', 'bar=4.2', 'foo=42'],
         ]
+
         if not yaml.__with_libyaml__:
             expected.insert(1, SLOW_YAML_LOGLINE)
         calls = fake_script_calls(self)
 
         if self.has_dispatch:
-            expected.insert(1, [
-                'juju-log', '--log-level', 'DEBUG', '--',
-                'Legacy {} does not exist.'.format(Path('hooks/collect-metrics'))])
+            expected.insert(
+                1,
+                [
+                    'juju-log',
+                    '--log-level',
+                    'DEBUG',
+                    '--',
+                    f"Legacy {Path('hooks/collect-metrics')} does not exist.",
+                ],
+            )
+
 
         self.assertEqual(calls, expected)
 
@@ -660,8 +686,9 @@ class _TestMain(abc.ABC):
         if self.has_dispatch:
             self.assertEqual(
                 calls.pop(0),
-                'juju-log --log-level DEBUG -- Legacy {} does not exist.'.format(
-                    Path("hooks/install")))
+                f'juju-log --log-level DEBUG -- Legacy {Path("hooks/install")} does not exist.',
+            )
+
 
         if not yaml.__with_libyaml__:
             self.assertEqual(calls.pop(0), ' '.join(SLOW_YAML_LOGLINE))
@@ -677,7 +704,7 @@ class _TestMain(abc.ABC):
             '    raise RuntimeError."failing as requested".\n'
             'RuntimeError: failing as requested'
         )
-        self.assertEqual(len(calls), 1, "expected 1 call, but got extra: {}".format(calls[1:]))
+        self.assertEqual(len(calls), 1, f"expected 1 call, but got extra: {calls[1:]}")
 
     def test_sets_model_name(self):
         self._prepare_actions()
@@ -778,13 +805,13 @@ class TestMainWithNoDispatch(_TestMain, unittest.TestCase):
             EventSpec(StartEvent, 'start'),
             EventSpec(UpgradeCharmEvent, 'upgrade-charm'),
         }
-        initial_hooks = {'hooks/' + ev.event_name for ev in initial_events}
+        initial_hooks = {f'hooks/{ev.event_name}' for ev in initial_events}
 
         def _assess_event_links(event_spec):
             self.assertTrue(self.hooks_dir / event_spec.event_name in self.hooks_dir.iterdir())
             for event_hook in all_event_hooks:
                 hook_path = self.JUJU_CHARM_DIR / event_hook
-                self.assertTrue(hook_path.exists(), 'Missing hook: ' + event_hook)
+                self.assertTrue(hook_path.exists(), f'Missing hook: {event_hook}')
                 if self.hooks_are_symlinks:
                     self.assertTrue(hook_path.is_symlink())
                     if not is_windows:
@@ -856,8 +883,11 @@ class _TestMainWithDispatch(_TestMain):
         def _assess_event_links(event_spec):
             self.assertNotIn(self.hooks_dir / event_spec.event_name, self.hooks_dir.iterdir())
             for event_hook in all_event_hooks:
-                self.assertFalse((self.JUJU_CHARM_DIR / event_hook).exists(),
-                                 'Spurious hook: ' + event_hook)
+                self.assertFalse(
+                    (self.JUJU_CHARM_DIR / event_hook).exists(),
+                    f'Spurious hook: {event_hook}',
+                )
+
 
         for initial_event in initial_events:
             self._setup_charm_dir()
@@ -879,15 +909,30 @@ class _TestMainWithDispatch(_TestMain):
         hook = Path('hooks/install')
         expected = [
             VERSION_LOGLINE,
-            ['juju-log', '--log-level', 'INFO', '--',
-             'Running legacy {}.'.format(hook)],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Legacy {} exited with status 0.'.format(hook)],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Using local storage: not a kubernetes charm'],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Emitting Juju event install.'],
+            ['juju-log', '--log-level', 'INFO', '--', f'Running legacy {hook}.'],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                f'Legacy {hook} exited with status 0.',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                'Using local storage: not a kubernetes charm',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                'Emitting Juju event install.',
+            ],
         ]
+
         if not yaml.__with_libyaml__:
             expected.insert(3, SLOW_YAML_LOGLINE)
         self.assertEqual(fake_script_calls(self), expected)
@@ -930,10 +975,16 @@ class _TestMainWithDispatch(_TestMain):
         hook = Path('hooks/install')
         expected = [
             VERSION_LOGLINE,
-            ['juju-log', '--log-level', 'INFO', '--', 'Running legacy {}.'.format(hook)],
-            ['juju-log', '--log-level', 'WARNING', '--',
-             'Legacy {} exited with status 42.'.format(hook)],
+            ['juju-log', '--log-level', 'INFO', '--', f'Running legacy {hook}.'],
+            [
+                'juju-log',
+                '--log-level',
+                'WARNING',
+                '--',
+                f'Legacy {hook} exited with status 42.',
+            ],
         ]
+
         self.assertEqual(calls, expected)
 
     def test_hook_and_dispatch_but_hook_is_dispatch(self):
@@ -983,18 +1034,38 @@ class _TestMainWithDispatch(_TestMain):
         hook = Path('hooks/install')
         expected = [
             VERSION_LOGLINE,
-            ['juju-log', '--log-level', 'INFO', '--',
-             'Running legacy {}.'.format(hook)],
-            VERSION_LOGLINE,    # because it called itself
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Charm called itself via {}.'.format(hook)],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Legacy {} exited with status 0.'.format(hook)],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Using local storage: not a kubernetes charm'],
-            ['juju-log', '--log-level', 'DEBUG', '--',
-             'Emitting Juju event install.'],
+            ['juju-log', '--log-level', 'INFO', '--', f'Running legacy {hook}.'],
+            VERSION_LOGLINE,
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                f'Charm called itself via {hook}.',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                f'Legacy {hook} exited with status 0.',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                'Using local storage: not a kubernetes charm',
+            ],
+            [
+                'juju-log',
+                '--log-level',
+                'DEBUG',
+                '--',
+                'Emitting Juju event install.',
+            ],
         ]
+
         if not yaml.__with_libyaml__:
             expected.insert(5, SLOW_YAML_LOGLINE)
         self.assertEqual(fake_script_calls(self), expected)
@@ -1154,4 +1225,4 @@ class TestStorageHeuristics(unittest.TestCase):
         meta = CharmMeta.from_yaml("series: [kubernetes]")
         with patch.dict(os.environ, {"JUJU_VERSION": "2.8"}), tempfile.NamedTemporaryFile() as fd:
             self.assertFalse(_should_use_controller_storage(Path(fd.name), meta))
-            self.assertLogged('Using local storage: {} already exists'.format(fd.name))
+            self.assertLogged(f'Using local storage: {fd.name} already exists')

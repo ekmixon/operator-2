@@ -34,9 +34,12 @@ def get_python_filepaths(include_tests=True):
             if dirpath == 'ops':
                 # Don't scan ops/_vendor directory
                 dirnames[:] = [x for x in dirnames if x != '_vendor']
-            for filename in filenames:
-                if filename.endswith(".py"):
-                    python_paths.append(os.path.join(dirpath, filename))
+            python_paths.extend(
+                os.path.join(dirpath, filename)
+                for filename in filenames
+                if filename.endswith(".py")
+            )
+
     return python_paths
 
 
@@ -47,9 +50,12 @@ class InfrastructureTests(unittest.TestCase):
         issues = []
         for filepath in get_python_filepaths():
             with open(filepath, "rt", encoding="utf8") as fh:
-                for idx, line in enumerate(fh, 1):
-                    if (r'\"' in line or r"\'" in line) and "NOQA" not in line:
-                        issues.append((filepath, idx, line.rstrip()))
+                issues.extend(
+                    (filepath, idx, line.rstrip())
+                    for idx, line in enumerate(fh, 1)
+                    if (r'\"' in line or r"\'" in line) and "NOQA" not in line
+                )
+
         if issues:
             msgs = ["{}:{:d}:{}".format(*issue) for issue in issues]
             self.fail("Spurious backslashes found, please fix these quotings:\n" + "\n".join(msgs))
