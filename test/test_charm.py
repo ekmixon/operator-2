@@ -395,6 +395,7 @@ start:
 
     def _test_action_events(self, cmd_type):
 
+
         class MyCharm(CharmBase):
 
             def __init__(self, *args):
@@ -411,13 +412,18 @@ start:
             def _on_start_action(self, event):
                 pass
 
-        fake_script(self, cmd_type + '-get', """echo '{"foo-name": "name", "silent": true}'""")
-        fake_script(self, cmd_type + '-set', "")
-        fake_script(self, cmd_type + '-log', "")
-        fake_script(self, cmd_type + '-fail', "")
+        fake_script(
+            self,
+            f'{cmd_type}-get',
+            """echo '{"foo-name": "name", "silent": true}'""",
+        )
+
+        fake_script(self, f'{cmd_type}-set', "")
+        fake_script(self, f'{cmd_type}-log', "")
+        fake_script(self, f'{cmd_type}-fail', "")
         self.meta = self._get_action_test_meta()
 
-        os.environ['JUJU_{}_NAME'.format(cmd_type.upper())] = 'foo-bar'
+        os.environ[f'JUJU_{cmd_type.upper()}_NAME'] = 'foo-bar'
         framework = self.create_framework()
         charm = MyCharm(framework)
 
@@ -427,12 +433,16 @@ start:
 
         charm.on.foo_bar_action.emit()
         self.assertEqual(charm.seen_action_params, {"foo-name": "name", "silent": True})
-        self.assertEqual(fake_script_calls(self), [
-            [cmd_type + '-get', '--format=json'],
-            [cmd_type + '-log', "test-log"],
-            [cmd_type + '-set', "res=val with spaces"],
-            [cmd_type + '-fail', "test-fail"],
-        ])
+        self.assertEqual(
+            fake_script_calls(self),
+            [
+                [f'{cmd_type}-get', '--format=json'],
+                [f'{cmd_type}-log', "test-log"],
+                [f'{cmd_type}-set', "res=val with spaces"],
+                [f'{cmd_type}-fail', "test-fail"],
+            ],
+        )
+
 
         # Make sure that action events that do not match the current context are
         # not possible to emit by hand.
@@ -444,6 +454,7 @@ start:
 
     def _test_action_event_defer_fails(self, cmd_type):
 
+
         class MyCharm(CharmBase):
 
             def __init__(self, *args):
@@ -453,10 +464,15 @@ start:
             def _on_start_action(self, event):
                 event.defer()
 
-        fake_script(self, cmd_type + '-get', """echo '{"foo-name": "name", "silent": true}'""")
+        fake_script(
+            self,
+            f'{cmd_type}-get',
+            """echo '{"foo-name": "name", "silent": true}'""",
+        )
+
         self.meta = self._get_action_test_meta()
 
-        os.environ['JUJU_{}_NAME'.format(cmd_type.upper())] = 'start'
+        os.environ[f'JUJU_{cmd_type.upper()}_NAME'] = 'start'
         framework = self.create_framework()
         charm = MyCharm(framework)
 

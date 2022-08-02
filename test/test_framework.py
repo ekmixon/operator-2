@@ -160,6 +160,8 @@ class TestFramework(BaseTestCase):
             bar = EventSource(MyEvent)
             baz = EventSource(MyEvent)
 
+
+
         class MyObserver(Object):
             def __init__(self, parent, key):
                 super().__init__(parent, key)
@@ -167,12 +169,13 @@ class TestFramework(BaseTestCase):
                 self.reprs = []
 
             def on_any(self, event):
-                self.seen.append("on_any:" + event.handle.kind)
+                self.seen.append(f"on_any:{event.handle.kind}")
                 self.reprs.append(repr(event))
 
             def on_foo(self, event):
-                self.seen.append("on_foo:" + event.handle.kind)
+                self.seen.append(f"on_foo:{event.handle.kind}")
                 self.reprs.append(repr(event))
+
 
         pub = MyNotifier(framework, "1")
         obs = MyObserver(framework, "1")
@@ -361,14 +364,17 @@ class TestFramework(BaseTestCase):
         class MyNotifier(Object):
             foo = EventSource(MyEvent)
 
+
+
         class MyObserver(Object):
             def __init__(self, parent, key):
                 super().__init__(parent, key)
                 self.seen = []
 
             def _on_foo(self, event):
-                self.seen.append("on_foo:{}={}".format(event.handle.kind, event.my_n))
+                self.seen.append(f"on_foo:{event.handle.kind}={event.my_n}")
                 event.defer()
+
 
         pub = MyNotifier(framework, "1")
         obs = MyObserver(framework, "1")
@@ -507,17 +513,20 @@ class TestFramework(BaseTestCase):
         class MyNotifier(Object):
             on = MyEvents()
 
+
+
         class MyObserver(Object):
             def __init__(self, parent, key):
                 super().__init__(parent, key)
                 self.seen = []
 
             def _on_foo(self, event):
-                self.seen.append("on_foo:{}".format(event.handle.kind))
+                self.seen.append(f"on_foo:{event.handle.kind}")
                 event.defer()
 
             def _on_bar(self, event):
-                self.seen.append("on_bar:{}".format(event.handle.kind))
+                self.seen.append(f"on_bar:{event.handle.kind}")
+
 
         pub = MyNotifier(framework, "1")
         obs = MyObserver(framework, "1")
@@ -531,8 +540,8 @@ class TestFramework(BaseTestCase):
         pub.on.foo.emit()
 
         self.assertEqual(obs.seen, ["on_foo:foo"])
-        fqn = pub.on.__class__.__module__ + "." + pub.on.__class__.__qualname__
-        self.assertEqual(repr(pub.on), "<{}: bar, foo>".format(fqn))
+        fqn = f"{pub.on.__class__.__module__}.{pub.on.__class__.__qualname__}"
+        self.assertEqual(repr(pub.on), f"<{fqn}: bar, foo>")
 
     def test_conflicting_event_attributes(self):
         class MyEvent(EventBase):
@@ -616,18 +625,21 @@ class TestFramework(BaseTestCase):
             on = MyEvents()
             bar = EventSource(MyBar)
 
+
+
         class MyObserver(Object):
             def __init__(self, parent, key):
                 super().__init__(parent, key)
                 self.seen = []
 
             def _on_foo(self, event):
-                self.seen.append("on_foo:{}:{}".format(type(event).__name__, event.handle.kind))
+                self.seen.append(f"on_foo:{type(event).__name__}:{event.handle.kind}")
                 event.defer()
 
             def _on_bar(self, event):
-                self.seen.append("on_bar:{}:{}".format(type(event).__name__, event.handle.kind))
+                self.seen.append(f"on_bar:{type(event).__name__}:{event.handle.kind}")
                 event.defer()
+
 
         pub = MyNotifier(framework, "1")
         obs = MyObserver(framework, "1")
@@ -656,18 +668,21 @@ class TestFramework(BaseTestCase):
             on_a = MyEventsA()
             on_b = MyEventsB()
 
+
+
         class MyObserver(Object):
             def __init__(self, parent, key):
                 super().__init__(parent, key)
                 self.seen = []
 
             def _on_foo(self, event):
-                self.seen.append("on_foo:{}:{}".format(type(event).__name__, event.handle.kind))
+                self.seen.append(f"on_foo:{type(event).__name__}:{event.handle.kind}")
                 event.defer()
 
             def _on_bar(self, event):
-                self.seen.append("on_bar:{}:{}".format(type(event).__name__, event.handle.kind))
+                self.seen.append(f"on_bar:{type(event).__name__}:{event.handle.kind}")
                 event.defer()
+
 
         pub = MyNotifier(framework, "1")
         obs = MyObserver(framework, "1")
@@ -1101,156 +1116,183 @@ class TestStoredState(BaseTestCase):
         # Test and validation functions in a list of 2-tuples.
         # Assignment and keywords like del are not supported in lambdas
         #  so functions are used instead.
-        test_operations = [(
-            lambda: {},         # Operand A.
-            None,               # Operand B.
-            {},                 # Expected result.
-            lambda a, b: None,  # Operation to perform.
-            lambda res, expected_res: self.assertEqual(res, expected_res)  # Validation to perform.
-        ), (
-            lambda: {},
-            {'a': {}},
-            {'a': {}},
-            lambda a, b: a.update(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: {'a': {}},
-            {'b': 'c'},
-            {'a': {'b': 'c'}},
-            lambda a, b: a['a'].update(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: {'a': {'b': 'c'}},
-            {'d': 'e'},
-            {'a': {'b': 'c', 'd': 'e'}},
-            lambda a, b: a['a'].update(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: {'a': {'b': 'c', 'd': 'e'}},
-            'd',
-            {'a': {'b': 'c'}},
-            lambda a, b: a['a'].pop(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: {'s': set()},
-            'a',
-            {'s': {'a'}},
-            lambda a, b: a['s'].add(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: {'s': {'a'}},
-            'a',
-            {'s': set()},
-            lambda a, b: a['s'].discard(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: [],
-            None,
-            [],
-            lambda a, b: None,
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: [],
-            'a',
-            ['a'],
-            lambda a, b: a.append(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['a'],
-            ['c'],
-            ['a', ['c']],
-            lambda a, b: a.append(b),
-            lambda res, expected_res: (
-                self.assertEqual(res, expected_res),
-                self.assertIsInstance(res[1], StoredList),
-            )
-        ), (
-            lambda: ['a', ['c']],
-            'b',
-            ['b', 'a', ['c']],
-            lambda a, b: a.insert(0, b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['b', 'a', ['c']],
-            ['d'],
-            ['b', ['d'], 'a', ['c']],
-            lambda a, b: a.insert(1, b),
-            lambda res, expected_res: (
-                self.assertEqual(res, expected_res),
-                self.assertIsInstance(res[1], StoredList)
+        test_operations = [
+            (
+                lambda: {},  # Operand A.
+                None,  # Operand B.
+                {},  # Expected result.
+                lambda a, b: None,  # Operation to perform.
+                lambda res, expected_res: self.assertEqual(
+                    res, expected_res
+                ),  # Validation to perform.
             ),
-        ), (
-            lambda: ['b', 'a', ['c']],
-            ['d'],
-            ['b', ['d'], ['c']],
-            # a[1] = b
-            lambda a, b: a.__setitem__(1, b),
-            lambda res, expected_res: (
-                self.assertEqual(res, expected_res),
-                self.assertIsInstance(res[1], StoredList)
+            (
+                lambda: {},
+                {'a': {}},
+                {'a': {}},
+                lambda a, b: a.update(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
             ),
-        ), (
-            lambda: ['b', ['d'], 'a', ['c']],
-            0,
-            [['d'], 'a', ['c']],
-            lambda a, b: a.pop(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: [['d'], 'a', ['c']],
-            ['d'],
-            ['a', ['c']],
-            lambda a, b: a.remove(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['a', ['c']],
-            'd',
-            ['a', ['c', 'd']],
-            lambda a, b: a[1].append(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['a', ['c', 'd']],
-            1,
-            ['a', ['c']],
-            lambda a, b: a[1].pop(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['a', ['c']],
-            'd',
-            ['a', ['c', 'd']],
-            lambda a, b: a[1].insert(1, b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: ['a', ['c', 'd']],
-            'd',
-            ['a', ['c']],
-            lambda a, b: a[1].remove(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: set(),
-            None,
-            set(),
-            lambda a, b: None,
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: set(),
-            'a',
-            set(['a']),
-            lambda a, b: a.add(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: set(['a']),
-            'a',
-            set(),
-            lambda a, b: a.discard(b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        ), (
-            lambda: set(),
-            {'a'},
-            set(),
-            # Nested sets are not allowed as sets themselves are not hashable.
-            lambda a, b: self.assertRaises(TypeError, a.add, b),
-            lambda res, expected_res: self.assertEqual(res, expected_res)
-        )]
+            (
+                lambda: {'a': {}},
+                {'b': 'c'},
+                {'a': {'b': 'c'}},
+                lambda a, b: a['a'].update(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: {'a': {'b': 'c'}},
+                {'d': 'e'},
+                {'a': {'b': 'c', 'd': 'e'}},
+                lambda a, b: a['a'].update(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: {'a': {'b': 'c', 'd': 'e'}},
+                'd',
+                {'a': {'b': 'c'}},
+                lambda a, b: a['a'].pop(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: {'s': set()},
+                'a',
+                {'s': {'a'}},
+                lambda a, b: a['s'].add(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: {'s': {'a'}},
+                'a',
+                {'s': set()},
+                lambda a, b: a['s'].discard(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: [],
+                None,
+                [],
+                lambda a, b: None,
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: [],
+                'a',
+                ['a'],
+                lambda a, b: a.append(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['a'],
+                ['c'],
+                ['a', ['c']],
+                lambda a, b: a.append(b),
+                lambda res, expected_res: (
+                    self.assertEqual(res, expected_res),
+                    self.assertIsInstance(res[1], StoredList),
+                ),
+            ),
+            (
+                lambda: ['a', ['c']],
+                'b',
+                ['b', 'a', ['c']],
+                lambda a, b: a.insert(0, b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['b', 'a', ['c']],
+                ['d'],
+                ['b', ['d'], 'a', ['c']],
+                lambda a, b: a.insert(1, b),
+                lambda res, expected_res: (
+                    self.assertEqual(res, expected_res),
+                    self.assertIsInstance(res[1], StoredList),
+                ),
+            ),
+            (
+                lambda: ['b', 'a', ['c']],
+                ['d'],
+                ['b', ['d'], ['c']],
+                # a[1] = b
+                lambda a, b: a.__setitem__(1, b),
+                lambda res, expected_res: (
+                    self.assertEqual(res, expected_res),
+                    self.assertIsInstance(res[1], StoredList),
+                ),
+            ),
+            (
+                lambda: ['b', ['d'], 'a', ['c']],
+                0,
+                [['d'], 'a', ['c']],
+                lambda a, b: a.pop(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: [['d'], 'a', ['c']],
+                ['d'],
+                ['a', ['c']],
+                lambda a, b: a.remove(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['a', ['c']],
+                'd',
+                ['a', ['c', 'd']],
+                lambda a, b: a[1].append(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['a', ['c', 'd']],
+                1,
+                ['a', ['c']],
+                lambda a, b: a[1].pop(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['a', ['c']],
+                'd',
+                ['a', ['c', 'd']],
+                lambda a, b: a[1].insert(1, b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: ['a', ['c', 'd']],
+                'd',
+                ['a', ['c']],
+                lambda a, b: a[1].remove(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: set(),
+                None,
+                set(),
+                lambda a, b: None,
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: set(),
+                'a',
+                {'a'},
+                lambda a, b: a.add(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: {'a'},
+                'a',
+                set(),
+                lambda a, b: a.discard(b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+            (
+                lambda: set(),
+                {'a'},
+                set(),
+                # Nested sets are not allowed as sets themselves are not hashable.
+                lambda a, b: self.assertRaises(TypeError, a.add, b),
+                lambda res, expected_res: self.assertEqual(res, expected_res),
+            ),
+        ]
+
 
         class SomeObject(Object):
             _stored = StoredState()
@@ -1308,86 +1350,35 @@ class TestStoredState(BaseTestCase):
             framework_copy.close()
 
     def test_comparison_operations(self):
-        test_operations = [(
-            {"1"},               # Operand A.
-            {"1", "2"},          # Operand B.
-            lambda a, b: a < b,  # Operation to test.
-            True,                # Result of op(A, B).
-            False,               # Result of op(B, A).
-        ), (
-            {"1"},
-            {"1", "2"},
-            lambda a, b: a > b,
-            False,
-            True
-        ), (
-            # Empty set comparison.
-            set(),
-            set(),
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            {"a", "c"},
-            {"c", "a"},
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            dict(),
-            dict(),
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            {"1": "2"},
-            {"1": "2"},
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            {"1": "2"},
-            {"1": "3"},
-            lambda a, b: a == b,
-            False,
-            False
-        ), (
-            [],
-            [],
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            [1, 2],
-            [1, 2],
-            lambda a, b: a == b,
-            True,
-            True
-        ), (
-            [1, 2, 5, 6],
-            [1, 2, 5, 8, 10],
-            lambda a, b: a <= b,
-            True,
-            False
-        ), (
-            [1, 2, 5, 6],
-            [1, 2, 5, 8, 10],
-            lambda a, b: a < b,
-            True,
-            False
-        ), (
-            [1, 2, 5, 8],
-            [1, 2, 5, 6, 10],
-            lambda a, b: a > b,
-            True,
-            False
-        ), (
-            [1, 2, 5, 8],
-            [1, 2, 5, 6, 10],
-            lambda a, b: a >= b,
-            True,
-            False
-        )]
+        test_operations = [
+            (
+                {"1"},  # Operand A.
+                {"1", "2"},  # Operand B.
+                lambda a, b: a < b,  # Operation to test.
+                True,  # Result of op(A, B).
+                False,  # Result of op(B, A).
+            ),
+            ({"1"}, {"1", "2"}, lambda a, b: a > b, False, True),
+            (
+                # Empty set comparison.
+                set(),
+                set(),
+                lambda a, b: a == b,
+                True,
+                True,
+            ),
+            ({"a", "c"}, {"c", "a"}, lambda a, b: a == b, True, True),
+            ({}, {}, lambda a, b: a == b, True, True),
+            ({"1": "2"}, {"1": "2"}, lambda a, b: a == b, True, True),
+            ({"1": "2"}, {"1": "3"}, lambda a, b: a == b, False, False),
+            ([], [], lambda a, b: a == b, True, True),
+            ([1, 2], [1, 2], lambda a, b: a == b, True, True),
+            ([1, 2, 5, 6], [1, 2, 5, 8, 10], lambda a, b: a <= b, True, False),
+            ([1, 2, 5, 6], [1, 2, 5, 8, 10], lambda a, b: a < b, True, False),
+            ([1, 2, 5, 8], [1, 2, 5, 6, 10], lambda a, b: a > b, True, False),
+            ([1, 2, 5, 8], [1, 2, 5, 6, 10], lambda a, b: a >= b, True, False),
+        ]
+
 
         class SomeObject(Object):
             _stored = StoredState()

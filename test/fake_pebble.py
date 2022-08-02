@@ -79,13 +79,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def internal_server_error(self, msg):
         d = {
-            "result": {
-                "message": "internal server error: {}".format(msg),
-            },
+            "result": {"message": f"internal server error: {msg}"},
             "status": "Internal Server Error",
             "status-code": 500,
-            "type": "error"
+            "type": "error",
         }
+
         self.respond(d, 500)
 
     def do_GET(self):  # noqa: N802
@@ -106,8 +105,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         allowed = []
         for method, regex, func in self.routes:
-            match = regex.match(path)
-            if match:
+            if match := regex.match(path):
                 if request_method == method:
                     data = self.read_body_json()
                     try:
@@ -152,7 +150,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if action == 'start':
             for service in services:
                 if service not in self._services:
-                    self.bad_request('service "{}" does not exist'.format(service))
+                    self.bad_request(f'service "{service}" does not exist')
                     return
             self.respond({
                 "change": "1234",
@@ -162,7 +160,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "type": "async"
             })
         else:
-            self.bad_request('action "{}" not implemented'.format(action))
+            self.bad_request(f'action "{action}" not implemented')
 
 
 def start_server():

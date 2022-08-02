@@ -63,7 +63,7 @@ class _UnixSocketConnection(http.client.HTTPConnection):
     def connect(self):
         """Override connect to use Unix socket (instead of TCP socket)."""
         if not hasattr(socket, 'AF_UNIX'):
-            raise NotImplementedError('Unix sockets not supported on {}'.format(sys.platform))
+            raise NotImplementedError(f'Unix sockets not supported on {sys.platform}')
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(self.socket_path)
         if self.timeout is not _not_provided:
@@ -152,11 +152,11 @@ class Error(Exception):
     """Base class of most errors raised by the Pebble client."""
 
     def __repr__(self):
-        return '<{}.{} {}>'.format(type(self).__module__, type(self).__name__, self.args)
+        return f'<{type(self).__module__}.{type(self).__name__} {self.args}>'
 
     def name(self):
         """Return a string representation of the model plus class."""
-        return '<{}.{}>'.format(type(self).__module__, type(self).__name__)
+        return f'<{type(self).__module__}.{type(self).__name__}>'
 
     def message(self):
         """Return the message passed as an argument."""
@@ -184,7 +184,7 @@ class PathError(Error):
         self.message = message
 
     def __str__(self):
-        return '{} - {}'.format(self.kind, self.message)
+        return f'{self.kind} - {self.message}'
 
     def __repr__(self):
         return 'PathError({!r}, {!r})'.format(self.kind, self.message)
@@ -228,9 +228,7 @@ class ChangeError(Error):
         for i, task in enumerate(self.change.tasks):
             if not task.log:
                 continue
-            parts.append('\n----- Logs from task {} -----\n'.format(i))
-            parts.append('\n'.join(task.log))
-
+            parts.extend((f'\n----- Logs from task {i} -----\n', '\n'.join(task.log)))
         if len(parts) > 1:
             parts.append('\n-----')
 
@@ -531,11 +529,13 @@ class Plan:
     def to_dict(self) -> typing.Dict[str, typing.Any]:
         """Convert this plan to its dict representation."""
         as_dicts = {name: service.to_dict() for name, service in self._services.items()}
-        if not as_dicts:
-            return {}
-        return {
-            'services': as_dicts,
-        }
+        return (
+            {
+                'services': as_dicts,
+            }
+            if as_dicts
+            else {}
+        )
 
     def to_yaml(self) -> str:
         """Return this plan's YAML representation."""
@@ -562,10 +562,7 @@ class Layer:
     # services: typing.Mapping[str, 'Service']
 
     def __init__(self, raw: typing.Union[str, typing.Dict] = None):
-        if isinstance(raw, str):
-            d = yaml.safe_load(raw) or {}
-        else:
-            d = raw or {}
+        d = yaml.safe_load(raw) or {} if isinstance(raw, str) else raw or {}
         self.summary = d.get('summary', '')
         self.description = d.get('description', '')
         self.services = {name: Service(name, service)
@@ -639,9 +636,7 @@ class Service:
         elif isinstance(other, Service):
             return self.to_dict() == other.to_dict()
         else:
-            raise ValueError(
-                "Cannot compare pebble.Service to {}".format(type(other))
-            )
+            raise ValueError(f"Cannot compare pebble.Service to {type(other)}")
 
 
 class ServiceStartup(enum.Enum):
@@ -884,10 +879,7 @@ class ExecProcess:
         if change.err:
             raise ChangeError(change.err, change)
 
-        exit_code = -1
-        if change.tasks:
-            exit_code = change.tasks[0].data.get('exit-code', -1)
-        return exit_code
+        return change.tasks[0].data.get('exit-code', -1) if change.tasks else -1
 
     def wait_output(self) -> typing.Tuple[typing.AnyStr, typing.AnyStr]:
         """Wait for the process to finish and return tuple of (stdout, stderr).
@@ -1008,7 +1000,7 @@ class _WebsocketWriter(io.BufferedIOBase):
     def write(self, chunk):
         """Write chunk to the websocket."""
         if not isinstance(chunk, bytes):
-            raise TypeError('value to write must be bytes, not {}'.format(type(chunk).__name__))
+            raise TypeError(f'value to write must be bytes, not {type(chunk).__name__}')
         self.ws.send_binary(chunk)
         return len(chunk)
 
@@ -1135,7 +1127,7 @@ class Client:
         """Make a request to the Pebble server; return the raw HTTPResponse object."""
         url = self.base_url + path
         if query:
-            url = url + '?' + urllib.parse.urlencode(query)
+            url = f'{url}?{urllib.parse.urlencode(query)}'
 
         # python 3.5 urllib requests require their data to be a bytes object -
         # generators won't work.
@@ -1157,7 +1149,7 @@ class Client:
             except (IOError, ValueError, KeyError) as e2:
                 # Will only happen on read error or if Pebble sends invalid JSON.
                 body = {}
-                message = '{} - {}'.format(type(e2).__name__, e2)
+                message = f'{type(e2).__name__} - {e2}'
             raise APIError(body, code, status, message)
         except urllib.error.URLError as e:
             raise ConnectionError(e.reason)
@@ -1193,13 +1185,13 @@ class Client:
 
     def get_change(self, change_id: ChangeID) -> Change:
         """Get single change by ID."""
-        resp = self._request('GET', '/v1/changes/{}'.format(change_id))
+        resp = self._request('GET', f'/v1/changes/{change_id}')
         return Change.from_dict(resp['result'])
 
     def abort_change(self, change_id: ChangeID) -> Change:
         """Abort change with given ID."""
         body = {'action': 'abort'}
-        resp = self._request('POST', '/v1/changes/{}'.format(change_id), body=body)
+        resp = self._request('POST', f'/v1/changes/{change_id}', body=body)
         return Change.from_dict(resp['result'])
 
     def autostart_services(self, timeout: float = 30.0, delay: float = 0.1) -> ChangeID:
@@ -1300,11 +1292,13 @@ class Client:
         self, action: str, services: typing.Iterable[str], timeout: float, delay: float,
     ) -> ChangeID:
         if not isinstance(services, (list, tuple)):
-            raise TypeError('services must be a list of str, not {}'.format(
-                type(services).__name__))
+            raise TypeError(
+                f'services must be a list of str, not {type(services).__name__}'
+            )
+
         for s in services:
             if not isinstance(s, str):
-                raise TypeError('service names must be str, not {}'.format(type(s).__name__))
+                raise TypeError(f'service names must be str, not {type(s).__name__}')
 
         body = {'action': action, 'services': services}
         resp = self._request('POST', '/v1/services', body=body)
@@ -1363,8 +1357,9 @@ class Client:
                 # Catch timeout from wait endpoint and loop to check deadline
                 pass
 
-        raise TimeoutError('timed out waiting for change {} ({} seconds)'.format(
-            change_id, timeout))
+        raise TimeoutError(
+            f'timed out waiting for change {change_id} ({timeout} seconds)'
+        )
 
     def _wait_change(self, change_id: ChangeID, timeout: float = None) -> Change:
         """Call the wait-change API endpoint directly."""
@@ -1373,13 +1368,15 @@ class Client:
             query['timeout'] = _format_timeout(timeout)
 
         try:
-            resp = self._request('GET', '/v1/changes/{}/wait'.format(change_id), query)
+            resp = self._request('GET', f'/v1/changes/{change_id}/wait', query)
         except APIError as e:
             if e.code == 404:
                 raise NotImplementedError('server does not implement wait-change endpoint')
             if e.code == 504:
-                raise TimeoutError('timed out waiting for change {} ({} seconds)'.format(
-                    change_id, timeout))
+                raise TimeoutError(
+                    f'timed out waiting for change {change_id} ({timeout} seconds)'
+                )
+
             raise
 
         return Change.from_dict(resp['result'])
@@ -1395,8 +1392,9 @@ class Client:
 
             time.sleep(delay)
 
-        raise TimeoutError('timed out waiting for change {} ({} seconds)'.format(
-            change_id, timeout))
+        raise TimeoutError(
+            f'timed out waiting for change {change_id} ({timeout} seconds)'
+        )
 
     def add_layer(
             self, label: str, layer: typing.Union[str, dict, Layer], *, combine: bool = False):
@@ -1408,7 +1406,7 @@ class Client:
         layer override rules; if the layer doesn't exist, it is added as usual.
         """
         if not isinstance(label, str):
-            raise TypeError('label must be a str, not {}'.format(type(label).__name__))
+            raise TypeError(f'label must be a str, not {type(label).__name__}')
 
         if isinstance(layer, str):
             layer_yaml = layer
@@ -1417,8 +1415,10 @@ class Client:
         elif isinstance(layer, Layer):
             layer_yaml = layer.to_yaml()
         else:
-            raise TypeError('layer must be str, dict, or pebble.Layer, not {}'.format(
-                type(layer).__name__))
+            raise TypeError(
+                f'layer must be str, dict, or pebble.Layer, not {type(layer).__name__}'
+            )
+
 
         body = {
             'action': 'add',
@@ -1440,9 +1440,7 @@ class Client:
         If names is specified, only fetch the service status for the services
         named.
         """
-        query = None
-        if names is not None:
-            query = {'names': ','.join(names)}
+        query = {'names': ','.join(names)} if names is not None else None
         resp = self._request('GET', '/v1/services', query)
         return [ServiceInfo.from_dict(info) for info in resp['result']]
 
@@ -1480,10 +1478,10 @@ class Client:
 
         # Then read the rest of the response and feed it to the parser.
         while True:
-            chunk = response.read(self._chunk_size)
-            if not chunk:
+            if chunk := response.read(self._chunk_size):
+                parser.feed(chunk)
+            else:
                 break
-            parser.feed(chunk)
         message = parser.close()
 
         # Walk over the multipart parts and read content and metadata.
@@ -1496,7 +1494,7 @@ class Client:
             elif name == 'files':
                 filename = part.get_filename()
                 if filename != path:
-                    raise ProtocolError('path not expected: {}'.format(filename))
+                    raise ProtocolError(f'path not expected: {filename}')
                 # decode=True, ironically, avoids decoding bytes to str
                 content = part.get_payload(decode=True)
 
@@ -1506,20 +1504,19 @@ class Client:
 
         if content is None:
             raise ProtocolError('no file content in multipart response')
-        if encoding is not None:
-            reader = io.StringIO(content.decode(encoding))
-        else:
-            reader = io.BytesIO(content)
-        return reader
+        return (
+            io.StringIO(content.decode(encoding))
+            if encoding is not None
+            else io.BytesIO(content)
+        )
 
     @staticmethod
     def _raise_on_path_error(resp, path):
         result = resp['result'] or []  # in case it's null instead of []
         paths = {item['path']: item for item in result}
         if path not in paths:
-            raise ProtocolError('path not found in response metadata: {}'.format(resp))
-        error = paths[path].get('error')
-        if error:
+            raise ProtocolError(f'path not found in response metadata: {resp}')
+        if error := paths[path].get('error'):
             raise PathError(error['kind'], error['message'])
 
     def push(
@@ -1947,8 +1944,7 @@ class Client:
 
     def _websocket_url(self, task_id: str, websocket_id: str) -> str:
         base_url = self.base_url.replace('http://', 'ws://')
-        url = '{}/v1/tasks/{}/websocket/{}'.format(base_url, task_id, websocket_id)
-        return url
+        return f'{base_url}/v1/tasks/{task_id}/websocket/{websocket_id}'
 
     def send_signal(self, sig: typing.Union[int, str], services: typing.List[str]):
         """Send the given signal to the list of services named.
@@ -1963,11 +1959,13 @@ class Client:
                 currently running.
         """
         if not isinstance(services, (list, tuple)):
-            raise TypeError('services must be a list of str, not {}'.format(
-                type(services).__name__))
+            raise TypeError(
+                f'services must be a list of str, not {type(services).__name__}'
+            )
+
         for s in services:
             if not isinstance(s, str):
-                raise TypeError('service names must be str, not {}'.format(type(s).__name__))
+                raise TypeError(f'service names must be str, not {type(s).__name__}')
 
         if isinstance(sig, int):
             sig = signal.Signals(sig).name

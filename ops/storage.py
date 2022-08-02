@@ -101,8 +101,7 @@ class SQLiteStorage:
         """
         c = self._db.cursor()
         c.execute("SELECT data FROM snapshot WHERE handle=?", (handle_path,))
-        row = c.fetchone()
-        if row:
+        if row := c.fetchone():
             return pickle.loads(row[0])
         raise NoSnapshotError(handle_path)
 
@@ -139,7 +138,7 @@ class SQLiteStorage:
             ''', (event_path, observer_path, method_name))
 
     def notices(self, event_path: str = None) ->\
-            typing.Generator[typing.Tuple[str, str, str], None, None]:
+                typing.Generator[typing.Tuple[str, str, str], None, None]:
         """Part of the Storage API, return all notices that begin with event_path.
 
         Args:
@@ -266,9 +265,7 @@ class JujuStorage:
             notice_list = self._backend.get(self.NOTICE_KEY)
         except KeyError:
             return []
-        if notice_list is None:
-            return []
-        return notice_list
+        return [] if notice_list is None else notice_list
 
     def _save_notice_list(self, notices: typing.List[typing.Tuple[str]]) -> None:
         """Save a notice list under current key.
@@ -349,7 +346,7 @@ class _JujuStorageBackend:
         """
         # We don't capture stderr here so it can end up in debug logs.
         p = _run(["state-get", key], stdout=subprocess.PIPE, check=True, universal_newlines=True)
-        if p.stdout == '' or p.stdout == '\n':
+        if p.stdout in ['', '\n']:
             raise KeyError(key)
         return yaml.load(p.stdout, Loader=_SimpleLoader)
 
@@ -371,4 +368,4 @@ class NoSnapshotError(Exception):
         self.handle_path = handle_path
 
     def __str__(self):
-        return 'no snapshot data found for {} object'.format(self.handle_path)
+        return f'no snapshot data found for {self.handle_path} object'

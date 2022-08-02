@@ -59,7 +59,7 @@ def use(name: str, api: int, author: str) -> ModuleType:
     if not isinstance(api, int):
         raise TypeError("invalid library API: {!r} (must be an int)".format(api))
     if api < 0:
-        raise ValueError('invalid library api: {} (must be ≥0)'.format(api))
+        raise ValueError(f'invalid library api: {api} (must be ≥0)')
     if not _libname_re.match(name):
         raise ValueError("invalid library name: {!r} (chars and digits only)".format(name))
     if not _libauthor_re.match(author):
@@ -73,12 +73,11 @@ def use(name: str, api: int, author: str) -> ModuleType:
         if lib.api == api:
             return lib.import_module()
 
-    others = ', '.join(str(lib.api) for lib in versions)
-    if others:
-        msg = 'cannot find "{}" from "{}" with API version {} (have {})'.format(
-            name, author, api, others)
+    if others := ', '.join(str(lib.api) for lib in versions):
+        msg = f'cannot find "{name}" from "{author}" with API version {api} (have {others})'
+
     else:
-        msg = 'cannot find library "{}" from "{}"'.format(name, author)
+        msg = f'cannot find library "{name}" from "{author}"'
 
     raise ImportError(msg, name=name)
 
@@ -133,7 +132,7 @@ def _find_all_specs(path):
                 logger.debug("  Finder for '%s' has no find_spec", opslib)
                 continue
             for lib_dir in lib_dirs:
-                spec_name = "{}.opslib.{}".format(top_dir, lib_dir)
+                spec_name = f"{top_dir}.opslib.{lib_dir}"
                 spec = finder.find_spec(spec_name)
                 if spec is None:
                     logger.debug("    No spec for %r", spec_name)
@@ -154,7 +153,7 @@ _NEEDED_KEYS = {'NAME': str, 'AUTHOR': str, 'API': int, 'PATCH': int}
 
 
 def _join_and(keys: List[str]) -> str:
-    if len(keys) == 0:
+    if not keys:
         return ""
     if len(keys) == 1:
         return keys[0]
@@ -170,11 +169,11 @@ class _Missing:
     def __str__(self):
         exp = set(_NEEDED_KEYS)
         got = set(self._found)
-        if len(got) == 0:
-            return "missing {}".format(_join_and(sorted(exp)))
-        return "got {}, but missing {}".format(
-            _join_and(sorted(got)),
-            _join_and(sorted(exp - got)))
+        return (
+            f"got {_join_and(sorted(got))}, but missing {_join_and(sorted(exp - got))}"
+            if got
+            else f"missing {_join_and(sorted(exp))}"
+        )
 
 
 def _parse_lib(spec):
@@ -236,7 +235,7 @@ class _Lib:
         self._module = None
 
     def __repr__(self):
-        return "<_Lib {}>".format(self)
+        return f"<_Lib {self}>"
 
     def __str__(self):
         return "{0.name} by {0.author}, API {0.api}, patch {0.patch}".format(self)

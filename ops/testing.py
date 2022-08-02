@@ -87,7 +87,7 @@ class Harness(typing.Generic[CharmType]):
         self._charm = None
         self._charm_dir = 'no-disk-path'  # this may be updated by _create_meta
         self._meta = self._create_meta(meta, actions)
-        self._unit_name = self._meta.name + '/0'
+        self._unit_name = f'{self._meta.name}/0'
         self._framework = None
         self._hooks_enabled = True
         self._relation_id_counter = 0
@@ -313,9 +313,9 @@ class Harness(typing.Generic[CharmType]):
                         'password': 'password',
                         }
         if resource_name not in self._meta.resources.keys():
-            raise RuntimeError('Resource {} is not a defined resources'.format(resource_name))
+            raise RuntimeError(f'Resource {resource_name} is not a defined resources')
         if self._meta.resources[resource_name].type != "oci-image":
-            raise RuntimeError('Resource {} is not an OCI Image'.format(resource_name))
+            raise RuntimeError(f'Resource {resource_name} is not an OCI Image')
 
         as_yaml = yaml.safe_dump(contents)
         self._backend._resources_map[resource_name] = ('contents.yaml', as_yaml)
@@ -332,11 +332,13 @@ class Harness(typing.Generic[CharmType]):
                 returned by resource-get. If contents is a string, it will be encoded in utf-8
         """
         if resource_name not in self._meta.resources.keys():
-            raise RuntimeError('Resource {} is not a defined resources'.format(resource_name))
+            raise RuntimeError(f'Resource {resource_name} is not a defined resources')
         record = self._meta.resources[resource_name]
         if record.type != "file":
             raise RuntimeError(
-                'Resource {} is not a file, but actually {}'.format(resource_name, record.type))
+                f'Resource {resource_name} is not a file, but actually {record.type}'
+            )
+
         filename = record.filename
         if filename is None:
             filename = resource_name
@@ -409,7 +411,9 @@ class Harness(typing.Generic[CharmType]):
         """
         if storage_name not in self._meta.storages:
             raise RuntimeError(
-                "the key '{}' is not specified as a storage key in metadata".format(storage_name))
+                f"the key '{storage_name}' is not specified as a storage key in metadata"
+            )
+
         storage_indices = self._backend.storage_add(storage_name, count)
 
         # Reset associated cached value in the storage mappings.  If we don't do this,
@@ -420,7 +424,7 @@ class Harness(typing.Generic[CharmType]):
             for storage_index in storage_indices:
                 self.charm.on[storage_name].storage_attached.emit(
                     model.Storage(storage_name, storage_index, self._backend))
-        return ["{}/{}".format(storage_name, storage_index) for storage_index in storage_indices]
+        return [f"{storage_name}/{storage_index}" for storage_index in storage_indices]
 
     def detach_storage(self, storage_id: str) -> None:
         """Detach a storage device.
@@ -475,7 +479,9 @@ class Harness(typing.Generic[CharmType]):
         storage_index = int(storage_index)
         if storage_name not in self._meta.storages:
             raise RuntimeError(
-                "the key '{}' is not specified as a storage key in metadata".format(storage_name))
+                f"the key '{storage_name}' is not specified as a storage key in metadata"
+            )
+
         is_attached = self._backend._storage_is_attached(storage_name, storage_index)
         if self.charm is not None and self._hooks_enabled and is_attached:
             self.charm.on[storage_name].storage_detaching.emit(
@@ -655,12 +661,11 @@ class Harness(typing.Generic[CharmType]):
             return
         rel_name = self._backend._relation_names[relation_id]
         relation = self.model.get_relation(rel_name, relation_id)
-        if '/' in unit_name:
-            app_name = unit_name.split('/')[0]
-            app = self.model.get_app(app_name)
-            unit = self.model.get_unit(unit_name)
-        else:
+        if '/' not in unit_name:
             raise ValueError('Invalid Unit Name')
+        app_name = unit_name.split('/')[0]
+        app = self.model.get_app(app_name)
+        unit = self.model.get_unit(unit_name)
         self._charm.on[rel_name].relation_departed.emit(relation, app, unit)
 
     def get_relation_data(self, relation_id: int, app_or_unit: AppUnitOrName) -> typing.Mapping:
@@ -704,10 +709,10 @@ class Harness(typing.Generic[CharmType]):
             for that container name. (should only happen if container is not present in
             metadata.yaml)
         """
-        socket_path = '/charm/containers/{}/pebble.socket'.format(container_name)
+        socket_path = f'/charm/containers/{container_name}/pebble.socket'
         client = self._backend._pebble_clients.get(socket_path)
         if client is None:
-            raise KeyError('no known pebble client for container "{}"'.format(container_name))
+            raise KeyError(f'no known pebble client for container "{container_name}"')
         return client.get_plan()
 
     def container_pebble_ready(self, container_name: str):
@@ -790,10 +795,9 @@ class Harness(typing.Generic[CharmType]):
             if v == '':
                 if new_values.pop(k, None) != v:
                     values_have_changed = True
-            else:
-                if k not in new_values or new_values[k] != v:
-                    new_values[k] = v
-                    values_have_changed = True
+            elif k not in new_values or new_values[k] != v:
+                new_values[k] = v
+                values_have_changed = True
 
         # Update the relation data in any case to avoid spurious references
         # by an test to an updated value to be invalidated by a lack of assignment
@@ -856,12 +860,11 @@ class Harness(typing.Generic[CharmType]):
         config = self._backend._config
         if key_values is not None:
             for key, value in key_values.items():
-                if key in self._defaults:
-                    if value is not None:
-                        config[key] = value
-                else:
-                    raise ValueError("unknown config option: '{}'".format(key))
+                if key not in self._defaults:
+                    raise ValueError(f"unknown config option: '{key}'")
 
+                if value is not None:
+                    config[key] = value
         for key in unset:
             # When the key is unset, revert to the default if one exists
             default = self._defaults.get(key, None)
@@ -1064,7 +1067,7 @@ class _TestingModelBackend:
             return self._relation_ids_map[relation_name]
         except KeyError as e:
             if relation_name not in self._meta.relations:
-                raise model.ModelError('{} is not a known relation'.format(relation_name)) from e
+                raise model.ModelError(f'{relation_name} is not a known relation') from e
             return []
 
     def relation_list(self, relation_id):
@@ -1088,10 +1091,7 @@ class _TestingModelBackend:
 
     def relation_set(self, relation_id, key, value, is_app):
         relation = self._relation_data[relation_id]
-        if is_app:
-            bucket_key = self.app_name
-        else:
-            bucket_key = self.unit_name
+        bucket_key = self.app_name if is_app else self.unit_name
         if bucket_key not in relation:
             relation[bucket_key] = {}
         bucket = relation[bucket_key]
@@ -1112,18 +1112,14 @@ class _TestingModelBackend:
     def resource_get(self, resource_name):
         if resource_name not in self._resources_map:
             raise model.ModelError(
-                "ERROR could not download resource: HTTP request failed: "
-                "Get https://.../units/unit-{}/resources/{}: resource#{}/{} not found".format(
-                    self.unit_name.replace('/', '-'), resource_name, self.app_name, resource_name
-                ))
+                f"ERROR could not download resource: HTTP request failed: Get https://.../units/unit-{self.unit_name.replace('/', '-')}/resources/{resource_name}: resource#{self.app_name}/{resource_name} not found"
+            )
+
         filename, contents = self._resources_map[resource_name]
         resource_dir = self._get_resource_dir()
         resource_filename = resource_dir / resource_name / filename
         if not resource_filename.exists():
-            if isinstance(contents, bytes):
-                mode = 'wb'
-            else:
-                mode = 'wt'
+            mode = 'wb' if isinstance(contents, bytes) else 'wt'
             resource_filename.parent.mkdir(exist_ok=True)
             with resource_filename.open(mode=mode) as resource_file:
                 resource_file.write(contents)
@@ -1133,10 +1129,7 @@ class _TestingModelBackend:
         self._pod_spec = (spec, k8s_resources)
 
     def status_get(self, *, is_app=False):
-        if is_app:
-            return self._app_status
-        else:
-            return self._unit_status
+        return self._app_status if is_app else self._unit_status
 
     def status_set(self, status, message='', *, is_app=False):
         if is_app:
@@ -1145,8 +1138,11 @@ class _TestingModelBackend:
             self._unit_status = {'status': status, 'message': message}
 
     def storage_list(self, name):
-        return list(index for index in self._storage_list[name]
-                    if self._storage_is_attached(name, index))
+        return [
+            index
+            for index in self._storage_list[name]
+            if self._storage_is_attached(name, index)
+        ]
 
     def storage_get(self, storage_name_id, attribute):
         name, index = storage_name_id.split("/", 1)
@@ -1158,18 +1154,17 @@ class _TestingModelBackend:
                 return self._storage_list[name][index][attribute]
         except KeyError:
             raise model.ModelError(
-                'ERROR invalid value "{}/{}" for option -s: storage not found'.format(name, index))
+                f'ERROR invalid value "{name}/{index}" for option -s: storage not found'
+            )
 
     def storage_add(self, name: str, count: int = 1):
         if name not in self._storage_list:
             self._storage_list[name] = {}
         result = []
-        for i in range(count):
+        for _ in range(count):
             index = self._storage_id_counter
             self._storage_id_counter += 1
-            self._storage_list[name][index] = {
-                "location": "/{}/{}".format(name, index)
-            }
+            self._storage_list[name][index] = {"location": f"/{name}/{index}"}
             result.append(index)
         return result
 
@@ -1319,8 +1314,10 @@ class _TestingPebbleClient:
         # A common mistake is to pass just the name of a service, rather than a list of services,
         # so trap that so it is caught quickly.
         if isinstance(services, str):
-            raise TypeError('start_services should take a list of names, not just "{}"'.format(
-                services))
+            raise TypeError(
+                f'start_services should take a list of names, not just "{services}"'
+            )
+
 
         # Note: jam 2021-04-20 We don't implement ChangeID, but the default caller of this is
         # Container.start() which currently ignores the return value
@@ -1329,7 +1326,7 @@ class _TestingPebbleClient:
         for name in services:
             if name not in known_services:
                 # TODO: jam 2021-04-20 This needs a better error type
-                raise RuntimeError('400 Bad Request: service "{}" does not exist'.format(name))
+                raise RuntimeError(f'400 Bad Request: service "{name}" does not exist')
             current = self._service_status.get(name, pebble.ServiceStatus.INACTIVE)
             if current == pebble.ServiceStatus.ACTIVE:
                 # TODO: jam 2021-04-20 I believe pebble actually validates all the service names
@@ -1351,8 +1348,10 @@ cannot perform the following tasks:
     ) -> pebble.ChangeID:
         # handle a common mistake of passing just a name rather than a list of names
         if isinstance(services, str):
-            raise TypeError('stop_services should take a list of names, not just "{}"'.format(
-                services))
+            raise TypeError(
+                f'stop_services should take a list of names, not just "{services}"'
+            )
+
         # TODO: handle invalid names
         # Note: jam 2021-04-20 We don't implement ChangeID, but the default caller of this is
         # Container.stop() which currently ignores the return value
@@ -1361,7 +1360,7 @@ cannot perform the following tasks:
             if name not in known_services:
                 # TODO: jam 2021-04-20 This needs a better error type
                 #  400 Bad Request: service "bal" does not exist
-                raise RuntimeError('400 Bad Request: service "{}" does not exist'.format(name))
+                raise RuntimeError(f'400 Bad Request: service "{name}" does not exist')
             current = self._service_status.get(name, pebble.ServiceStatus.INACTIVE)
             if current != pebble.ServiceStatus.ACTIVE:
                 # TODO: jam 2021-04-20 I believe pebble actually validates all the service names
@@ -1379,8 +1378,10 @@ ChangeError: cannot perform the following tasks:
     ) -> pebble.ChangeID:
         # handle a common mistake of passing just a name rather than a list of names
         if isinstance(services, str):
-            raise TypeError('restart_services should take a list of names, not just "{}"'.format(
-                services))
+            raise TypeError(
+                f'restart_services should take a list of names, not just "{services}"'
+            )
+
         # TODO: handle invalid names
         # Note: jam 2021-04-20 We don't implement ChangeID, but the default caller of this is
         # Container.restart() which currently ignores the return value
@@ -1389,7 +1390,7 @@ ChangeError: cannot perform the following tasks:
             if name not in known_services:
                 # TODO: jam 2021-04-20 This needs a better error type
                 #  400 Bad Request: service "bal" does not exist
-                raise RuntimeError('400 Bad Request: service "{}" does not exist'.format(name))
+                raise RuntimeError(f'400 Bad Request: service "{name}" does not exist')
         for name in services:
             self._service_status[name] = pebble.ServiceStatus.ACTIVE
 
@@ -1404,34 +1405,41 @@ ChangeError: cannot perform the following tasks:
         # I wish we could combine some of this helpful object corralling with the actual backend,
         # rather than having to re-implement it. Maybe we could subclass
         if not isinstance(label, str):
-            raise TypeError('label must be a str, not {}'.format(type(label).__name__))
+            raise TypeError(f'label must be a str, not {type(label).__name__}')
 
         if isinstance(layer, (str, dict)):
             layer_obj = pebble.Layer(layer)
         elif isinstance(layer, pebble.Layer):
             layer_obj = layer
         else:
-            raise TypeError('layer must be str, dict, or pebble.Layer, not {}'.format(
-                type(layer).__name__))
+            raise TypeError(
+                f'layer must be str, dict, or pebble.Layer, not {type(layer).__name__}'
+            )
+
         if label in self._layers:
             # TODO: jam 2021-04-19 These should not be RuntimeErrors but should be proper error
             #  types. https://github.com/canonical/operator/issues/514
             if not combine:
-                raise RuntimeError('400 Bad Request: layer "{}" already exists'.format(label))
+                raise RuntimeError(f'400 Bad Request: layer "{label}" already exists')
             layer = self._layers[label]
             for name, service in layer_obj.services.items():
                 # 'override' is actually single quoted in the real error, but
                 # it shouldn't be, hopefully that gets cleaned up.
                 if not service.override:
-                    raise RuntimeError('500 Internal Server Error: layer "{}" must define'
-                                       '"override" for service "{}"'.format(label, name))
+                    raise RuntimeError(
+                        f'500 Internal Server Error: layer "{label}" must define"override" for service "{name}"'
+                    )
+
                 if service.override not in ('merge', 'replace'):
-                    raise RuntimeError('500 Internal Server Error: layer "{}" has invalid '
-                                       '"override" value on service "{}"'.format(label, name))
+                    raise RuntimeError(
+                        f'500 Internal Server Error: layer "{label}" has invalid "override" value on service "{name}"'
+                    )
+
                 if service.override != 'replace':
                     raise RuntimeError(
-                        'override: "{}" unsupported for layer "{}" service "{}"'.format(
-                            service.override, label, name))
+                        f'override: "{service.override}" unsupported for layer "{label}" service "{name}"'
+                    )
+
                 layer.services[name] = service
         else:
             self._layers[label] = layer_obj
@@ -1456,8 +1464,10 @@ ChangeError: cannot perform the following tasks:
 
     def get_services(self, names: typing.List[str] = None) -> typing.List[pebble.ServiceInfo]:
         if isinstance(names, str):
-            raise TypeError('start_services should take a list of names, not just "{}"'.format(
-                names))
+            raise TypeError(
+                f'start_services should take a list of names, not just "{names}"'
+            )
+
         services = self._render_services()
         infos = []
         if names is None:
@@ -1497,8 +1507,7 @@ ChangeError: cannot perform the following tasks:
                 path, source, encoding=encoding, make_dirs=make_dirs, permissions=permissions,
                 user_id=user_id, user=user, group_id=group_id, group=group)
         except FileNotFoundError as e:
-            raise pebble.PathError(
-                'not-found', 'parent directory not found: {}'.format(e.args[0]))
+            raise pebble.PathError('not-found', f'parent directory not found: {e.args[0]}')
         except NonAbsolutePathError as e:
             raise pebble.PathError(
                 'generic-file-error',
@@ -1512,8 +1521,12 @@ ChangeError: cannot perform the following tasks:
         except FileNotFoundError:
             # conform with the real pebble api
             raise pebble.APIError(
-                body={}, code=404, status='Not Found',
-                message="stat {}: no such file or directory".format(path))
+                body={},
+                code=404,
+                status='Not Found',
+                message=f"stat {path}: no such file or directory",
+            )
+
 
         if not itself:
             try:
@@ -1557,11 +1570,10 @@ ChangeError: cannot perform the following tasks:
                 user_id=user_id, user=user, group_id=group_id, group=group)
         except FileNotFoundError as e:
             # Parent directory doesn't exist and make_parents is False
-            raise pebble.PathError(
-                'not-found', 'parent directory not found: {}'.format(e.args[0]))
+            raise pebble.PathError('not-found', f'parent directory not found: {e.args[0]}')
         except NotADirectoryError as e:
             # Attempted to create a subdirectory of a file
-            raise pebble.PathError('generic-file-error', 'not a directory: {}'.format(e.args[0]))
+            raise pebble.PathError('generic-file-error', f'not a directory: {e.args[0]}')
         except NonAbsolutePathError as e:
             raise pebble.PathError(
                 'generic-file-error',
@@ -1576,7 +1588,9 @@ ChangeError: cannot perform the following tasks:
                 # Pebble doesn't give not-found error when recursive is specified
                 return
             raise pebble.PathError(
-                'not-found', 'remove {}: no such file or directory'.format(path))
+                'not-found', f'remove {path}: no such file or directory'
+            )
+
 
         if isinstance(file_or_dir, _Directory) and len(file_or_dir) > 0 and not recursive:
             raise pebble.PathError(
@@ -1600,7 +1614,7 @@ ChangeError: cannot perform the following tasks:
         for service in service_names:
             if service not in plan.services or not self.get_services([service])[0].is_running():
                 # conform with the real pebble api
-                message = 'cannot send signal to "{}": service is not running'.format(service)
+                message = f'cannot send signal to "{service}": service is not running'
                 body = {'type': 'error', 'status-code': 500, 'status': 'Internal Server Error',
                         'result': {'message': message}}
                 raise pebble.APIError(
@@ -1612,9 +1626,8 @@ ChangeError: cannot perform the following tasks:
             signal.Signals[sig]
         except KeyError:
             # conform with the real pebble api
-            message = 'cannot send signal to "{}": invalid signal name "{}"'.format(
-                service_names[0],
-                sig)
+            message = f'cannot send signal to "{service_names[0]}": invalid signal name "{sig}"'
+
             body = {'type': 'error', 'status-code': 500, 'status': 'Internal Server Error',
                     'result': {'message': message}}
             raise pebble.APIError(
@@ -1650,15 +1663,14 @@ class _MockFilesystem:
         for token in tokens[:-1]:
             if token in current_dir:
                 current_dir = current_dir[token]
+            elif make_parents:
+                # NOTE: other parameters (e.g. ownership, permissions) only get applied to the
+                # final directory.
+                # (At the time of writing, Pebble defaults to 0o755 permissions and root:root
+                # ownership.)
+                current_dir = current_dir.create_dir(token)
             else:
-                if make_parents:
-                    # NOTE: other parameters (e.g. ownership, permissions) only get applied to the
-                    # final directory.
-                    # (At the time of writing, Pebble defaults to 0o755 permissions and root:root
-                    # ownership.)
-                    current_dir = current_dir.create_dir(token)
-                else:
-                    raise FileNotFoundError(str(current_dir.path / token))
+                raise FileNotFoundError(str(current_dir.path / token))
             if isinstance(current_dir, _File):
                 raise NotADirectoryError(str(current_dir.path))
 
@@ -1667,13 +1679,10 @@ class _MockFilesystem:
         token = tokens[-1]
         if token not in current_dir:
             current_dir = current_dir.create_dir(token, **kwargs)
+        elif make_parents:
+            current_dir = _Directory(current_dir.path / token)
         else:
-            # If 'make_parents' is specified, behave like 'mkdir -p' and ignore if the dir already
-            # exists.
-            if make_parents:
-                current_dir = _Directory(current_dir.path / token)
-            else:
-                raise FileExistsError(str(current_dir.path / token))
+            raise FileExistsError(str(current_dir.path / token))
         return current_dir
 
     def create_file(
@@ -1701,7 +1710,9 @@ class _MockFilesystem:
                 raise
         if not isinstance(dir_, _Directory):
             raise pebble.PathError(
-                'generic-file-error', 'parent is not a directory: {}'.format(str(dir_)))
+                'generic-file-error', f'parent is not a directory: {str(dir_)}'
+            )
+
         return dir_.create_file(path_obj.name, data, encoding=encoding, **kwargs)
 
     def list_dir(self, path) -> typing.List['_File']:
@@ -1718,7 +1729,7 @@ class _MockFilesystem:
                 # For now, ignoring other possible cases besides File and Directory (e.g. Symlink).
                 raise NotImplementedError()
 
-        return [child for child in current_dir]
+        return list(current_dir)
 
     def open(
             self,
@@ -1732,7 +1743,7 @@ class _MockFilesystem:
         return file.open(encoding=encoding)
 
     def get_path(self, path: typing.Union[str, pathlib.PurePosixPath]) \
-            -> typing.Union['_Directory', '_File']:
+                -> typing.Union['_Directory', '_File']:
         path = pathlib.PurePosixPath(path)
         tokens = path.parts[1:]
         current_object = self.root
@@ -1761,13 +1772,13 @@ class _Directory:
     def name(self) -> str:
         # Need to handle special case for root.
         # pathlib.PurePosixPath('/').name is '', but pebble returns '/'.
-        return self.path.name if self.path.name else '/'
+        return self.path.name or '/'
 
     def __contains__(self, child: str) -> bool:
         return child in self._children
 
     def __iter__(self) -> typing.Iterator[typing.Union['_File', '_Directory']]:
-        return (value for value in self._children.values())
+        return iter(self._children.values())
 
     def __getitem__(self, key: str) -> typing.Union['_File', '_Directory']:
         return self._children[key]
